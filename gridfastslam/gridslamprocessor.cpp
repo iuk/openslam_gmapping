@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <gmapping/utils/stat.h>
 #include <gmapping/gridfastslam/gridslamprocessor.h>
-#include <gmapping/gridfastslam/gridslamprocessor.hxx>
+//#include <gmapping/gridfastslam/gridslamprocessor.hxx>
 
 //#define MAP_CONSISTENCY_CHECK
 //#define GENERATE_TRAJECTORIES
