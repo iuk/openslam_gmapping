@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <gmapping/utils/stat.h>
 #include <gmapping/gridfastslam/gridslamprocessor.h>
+#include <gmapping/gridfastslam/gridslamprocessor.hxx>
 
 //#define MAP_CONSISTENCY_CHECK
 //#define GENERATE_TRAJECTORIES
@@ -14,32 +15,32 @@
 namespace GMapping {
 
 const double m_distanceThresholdCheck = 20;
- 
+
 using namespace std;
 
   GridSlamProcessor::GridSlamProcessor(): m_infoStream(cout){
-    
+
     period_ = 5.0;
     m_obsSigmaGain=1;
     m_resampleThreshold=0.5;
     m_minimumScore=0.;
   }
-  
-  GridSlamProcessor::GridSlamProcessor(const GridSlamProcessor& gsp) 
-    :last_update_time_(0.0), m_particles(gsp.m_particles), m_infoStream(cout){
-    
-    period_ = 5.0;
 
-    m_obsSigmaGain=gsp.m_obsSigmaGain;
+  GridSlamProcessor::GridSlamProcessor(const GridSlamProcessor& gsp)
+    :last_update_time_(0.0), m_particles(gsp.m_particles), m_infoStream(cout){
+
+    period_ = 5.0;  // 周期？
+// 保存一遍前一次算法中的各种参数
+    m_obsSigmaGain=gsp.m_obsSigmaGain;    // 什么东西，在哪定义的？原来是通过宏定义预处理出来的变量定义。
     m_resampleThreshold=gsp.m_resampleThreshold;
     m_minimumScore=gsp.m_minimumScore;
-    
+
     m_beams=gsp.m_beams;
     m_indexes=gsp.m_indexes;
     m_motionModel=gsp.m_motionModel;
     m_resampleThreshold=gsp.m_resampleThreshold;
     m_matcher=gsp.m_matcher;
-    
+
     m_count=gsp.m_count;
     m_readingCount=gsp.m_readingCount;
     m_lastPartPose=gsp.m_lastPartPose;
@@ -48,34 +49,34 @@ using namespace std;
     m_linearDistance=gsp.m_linearDistance;
     m_angularDistance=gsp.m_angularDistance;
     m_neff=gsp.m_neff;
-	
+
     cerr << "FILTER COPY CONSTRUCTOR" << endl;
     cerr << "m_odoPose=" << m_odoPose.x << " " <<m_odoPose.y << " " << m_odoPose.theta << endl;
     cerr << "m_lastPartPose=" << m_lastPartPose.x << " " <<m_lastPartPose.y << " " << m_lastPartPose.theta << endl;
     cerr << "m_linearDistance=" << m_linearDistance << endl;
     cerr << "m_angularDistance=" << m_linearDistance << endl;
-    
-		
+
+
     m_xmin=gsp.m_xmin;
     m_ymin=gsp.m_ymin;
     m_xmax=gsp.m_xmax;
     m_ymax=gsp.m_ymax;
     m_delta=gsp.m_delta;
-    
+
     m_regScore=gsp.m_regScore;
     m_critScore=gsp.m_critScore;
     m_maxMove=gsp.m_maxMove;
-    
+
     m_linearThresholdDistance=gsp.m_linearThresholdDistance;
     m_angularThresholdDistance=gsp.m_angularThresholdDistance;
     m_obsSigmaGain=gsp.m_obsSigmaGain;
-    
+
 #ifdef MAP_CONSISTENCY_CHECK
     cerr << __PRETTY_FUNCTION__ <<  ": trajectories copy.... ";
 #endif
-    TNodeVector v=gsp.getTrajectories();
+    TNodeVector v=gsp.getTrajectories();  // 获取上一次的粒子？
     for (unsigned int i=0; i<v.size(); i++){
-		m_particles[i].node=v[i];
+		m_particles[i].node=v[i]; // 暂存上一次的粒子
     }
 #ifdef MAP_CONSISTENCY_CHECK
     cerr <<  "end" << endl;
@@ -86,13 +87,13 @@ using namespace std;
     updateTreeWeights(false);
     cerr  << ".done!" <<endl;
   }
-  
+
   GridSlamProcessor::GridSlamProcessor(std::ostream& infoS): m_infoStream(infoS){
     period_ = 5.0;
     m_obsSigmaGain=1;
     m_resampleThreshold=0.5;
     m_minimumScore=0.;
-	
+
   }
 
   GridSlamProcessor* GridSlamProcessor::clone() const {
@@ -123,7 +124,7 @@ using namespace std;
 	cerr << __PRETTY_FUNCTION__ <<  ": SUCCESS, the error is somewhere else" << endl;
 # endif
 	GridSlamProcessor* cloned=new GridSlamProcessor(*this);
-	
+
 # ifdef MAP_CONSISTENCY_CHECK
 	cerr << __PRETTY_FUNCTION__ <<  ": trajectories end" << endl;
 	cerr << __PRETTY_FUNCTION__ << ": performing afterclone_fit_test" << endl;
@@ -147,12 +148,12 @@ using namespace std;
 # endif
 	return cloned;
 }
-  
+
   GridSlamProcessor::~GridSlamProcessor(){
     cerr << __PRETTY_FUNCTION__ << ": Start" << endl;
     cerr << __PRETTY_FUNCTION__ << ": Deleting tree" << endl;
     for (std::vector<Particle>::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-#ifdef TREE_CONSISTENCY_CHECK		
+#ifdef TREE_CONSISTENCY_CHECK
       TNode* node=it->node;
       while(node)
 	node=node->parent;
@@ -162,7 +163,7 @@ using namespace std;
 	delete it->node;
       //cout << "l=" << it->weight<< endl;
     }
-    
+
 # ifdef MAP_CONSISTENCY_CHECK
     cerr << __PRETTY_FUNCTION__ << ": performing predestruction_fit_test" << endl;
     typedef std::map<autoptr< Array2D<PointAccumulator> >::reference* const, int> PointerMap;
@@ -191,8 +192,8 @@ using namespace std;
   }
 
 
-		
-  void GridSlamProcessor::setMatchingParameters (double urange, double range, double sigma, int kernsize, double lopt, double aopt, 
+
+  void GridSlamProcessor::setMatchingParameters (double urange, double range, double sigma, int kernsize, double lopt, double aopt,
 						 int iterations, double likelihoodSigma, double likelihoodGain, unsigned int likelihoodSkip){
     m_obsSigmaGain=likelihoodGain;
     m_matcher.setMatchingParameters(urange, range, sigma, kernsize, lopt, aopt, iterations, likelihoodSigma, likelihoodSkip);
@@ -204,106 +205,124 @@ using namespace std;
 		   << " -lstep "    << lopt
 		   << " -lobsGain " << m_obsSigmaGain
 		   << " -astep "    << aopt << endl;
-    
-    
+
+
   }
-  
+
 void GridSlamProcessor::setMotionModelParameters
 (double srr, double srt, double str, double stt){
   m_motionModel.srr=srr;
   m_motionModel.srt=srt;
   m_motionModel.str=str;
-  m_motionModel.stt=stt;	
-  
-  if (m_infoStream)
-    m_infoStream << " -srr "<< srr 	<< " -srt "<< srt  
-		 << " -str "<< str 	<< " -stt "<< stt << endl;
-  
-}
-  
-  void GridSlamProcessor::setUpdateDistances(double linear, double angular, double resampleThreshold){
-    m_linearThresholdDistance=linear; 
-    m_angularThresholdDistance=angular;
-    m_resampleThreshold=resampleThreshold;	
-    if (m_infoStream)
-      m_infoStream << " -linearUpdate " << linear
-		   << " -angularUpdate "<< angular
-		   << " -resampleThreshold " << m_resampleThreshold << endl;
-  }
-  
-  //HERE STARTS THE BEEF
+  m_motionModel.stt=stt;
 
-  GridSlamProcessor::Particle::Particle(const ScanMatcherMap& m):
-    map(m), pose(0,0,0), weight(0), weightSum(0), gweight(0), previousIndex(0){
-    node=0;
-  }
-  
-  
-  void GridSlamProcessor::setSensorMap(const SensorMap& smap){
-    
-    /*
-      Construct the angle table for the sensor
-      
-      FIXME For now detect the readings of only the front laser, and assume its pose is in the center of the robot 
-    */
-    
-    SensorMap::const_iterator laser_it=smap.find(std::string("FLASER"));
-    if (laser_it==smap.end()){
-      cerr << "Attempting to load the new carmen log format" << endl;
-      laser_it=smap.find(std::string("ROBOTLASER1"));
-      assert(laser_it!=smap.end());
-    }
-    const RangeSensor* rangeSensor=dynamic_cast<const RangeSensor*>((laser_it->second));
-    assert(rangeSensor && rangeSensor->beams().size());
-    
-    m_beams=static_cast<unsigned int>(rangeSensor->beams().size());
-    double* angles=new double[rangeSensor->beams().size()];
-    for (unsigned int i=0; i<m_beams; i++){
-      angles[i]=rangeSensor->beams()[i].pose.theta;
-    }
-    m_matcher.setLaserParameters(m_beams, angles, rangeSensor->getPose());
-    delete [] angles;
-  }
-  
-  void GridSlamProcessor::init(unsigned int size, double xmin, double ymin, double xmax, double ymax, double delta, OrientedPoint initialPose){
+  if (m_infoStream)
+    m_infoStream << " -srr "<< srr 	<< " -srt "<< srt
+		 << " -str "<< str 	<< " -stt "<< stt << endl;
+
+}
+
+void GridSlamProcessor::setUpdateDistances(double linear, double angular, double resampleThreshold){
+m_linearThresholdDistance=linear;
+m_angularThresholdDistance=angular;
+m_resampleThreshold=resampleThreshold;
+if (m_infoStream)
+  m_infoStream << " -linearUpdate " << linear
+       << " -angularUpdate "<< angular
+       << " -resampleThreshold " << m_resampleThreshold << endl;
+}
+
+//HERE STARTS THE BEEF
+
+GridSlamProcessor::Particle::Particle(const ScanMatcherMap& m):
+map(m), pose(0,0,0), weight(0), weightSum(0), gweight(0), previousIndex(0){
+node=0;
+}
+
+
+void GridSlamProcessor::setSensorMap(const SensorMap& smap){
+
+/*
+  Construct the angle table for the sensor
+
+  FIXME For now detect the readings of only the front laser, and assume its pose is in the center of the robot
+*/
+
+SensorMap::const_iterator laser_it=smap.find(std::string("FLASER"));
+if (laser_it==smap.end()){
+  cerr << "Attempting to load the new carmen log format" << endl;
+  laser_it=smap.find(std::string("ROBOTLASER1"));
+  assert(laser_it!=smap.end());
+}
+const RangeSensor* rangeSensor=dynamic_cast<const RangeSensor*>((laser_it->second));
+assert(rangeSensor && rangeSensor->beams().size());
+
+m_beams=static_cast<unsigned int>(rangeSensor->beams().size());
+double* angles=new double[rangeSensor->beams().size()];
+for (unsigned int i=0; i<m_beams; i++){
+  angles[i]=rangeSensor->beams()[i].pose.theta;
+}
+m_matcher.setLaserParameters(m_beams, angles, rangeSensor->getPose());
+delete [] angles;
+}
+
+// size：是粒子的个数
+// initialPose ： 机体在 odom 中的初始位置，可以使用 0 0 0
+void GridSlamProcessor::init(unsigned int size, double xmin,
+                           double ymin, double xmax, double ymax,
+                           double delta, OrientedPoint initialPose)
+{
+    // 地图大小 和 分辨率
     m_xmin=xmin;
     m_ymin=ymin;
     m_xmax=xmax;
     m_ymax=ymax;
     m_delta=delta;
+
     if (m_infoStream)
-      m_infoStream 
-	<< " -xmin "<< m_xmin
-	<< " -xmax "<< m_xmax
-	<< " -ymin "<< m_ymin
-	<< " -ymax "<< m_ymax
-	<< " -delta "<< m_delta
-	<< " -particles "<< size << endl;
-    
+      m_infoStream
+    << " -xmin "<< m_xmin
+    << " -xmax "<< m_xmax
+    << " -ymin "<< m_ymin
+    << " -ymax "<< m_ymax
+    << " -delta "<< m_delta
+    << " -particles "<< size << endl;
+
 
     m_particles.clear();
+
+    // 新建一个 node
+    // TNode(pose, weight, TNode* parent=0, unsigned int childs=0);
     TNode* node=new TNode(initialPose, 0, 0, 0);
+
+    // Map 定义
+    // Map(const Point& center, double worldSizeX, double worldSizeY, double delta);
+    // 这里的map只是有大小，没有内容
     ScanMatcherMap lmap(Point(xmin+xmax, ymin+ymax)*.5, xmax-xmin, ymax-ymin, delta);
-    for (unsigned int i=0; i<size; i++){
-      m_particles.push_back(Particle(lmap));
-      m_particles.back().pose=initialPose;
-      m_particles.back().previousPose=initialPose;
-      m_particles.back().setWeight(0);
-      m_particles.back().previousIndex=0;
-      
-		// this is not needed
-		//		m_particles.back().node=new TNode(initialPose, 0, node, 0);
 
-		// we use the root directly
-		m_particles.back().node= node;
+    // 对粒子个数循环
+    for (unsigned int i=0; i<size; i++)
+    {
+        m_particles.push_back(Particle(lmap));    // 构造一个 粒子（使用地图，没有内容的地图），存到 粒子 vector 中
+        m_particles.back().pose=initialPose;  // 对这个粒子加入位置
+        m_particles.back().previousPose=initialPose;  // 前一个位置
+        m_particles.back().setWeight(0);  // 粒子权重
+        m_particles.back().previousIndex=0;   //？？
+
+        // this is not needed
+        //		m_particles.back().node=new TNode(initialPose, 0, node, 0);
+
+        // we use the root directly
+        m_particles.back().node= node;  // 每个粒子还要配一个 node。node中有 位置 权重 父级，子个数 信息
     }
-    m_neff=(double)size;
-    m_count=0;
-    m_readingCount=0;
-    m_linearDistance=m_angularDistance=0;
-  }
 
-  void GridSlamProcessor::processTruePos(const OdometryReading& o){
+    m_neff=(double)size;    // 重采样的一个阈值？？
+    m_count=0;  // 和下一个什么区别？
+    m_readingCount=0;   //gsp 读入了多少帧reading
+    m_linearDistance=m_angularDistance=0;   // ？？
+}
+
+ void GridSlamProcessor::processTruePos(const OdometryReading& o){
     const OdometrySensor* os=dynamic_cast<const OdometrySensor*>(o.getSensor());
     if (os && os->isIdeal() && m_outputStream){
       m_outputStream << setiosflags(ios::fixed) << setprecision(3);
@@ -311,20 +330,27 @@ void GridSlamProcessor::setMotionModelParameters
       m_outputStream << setiosflags(ios::fixed) << setprecision(6) << o.getPose().theta << " " <<  o.getTime() << endl;
     }
   }
-  
-  
-  bool GridSlamProcessor::processScan(const RangeReading & reading, int adaptParticles){
-    
+
+// 头文件中 adaptParticles 缺省值 = 0，估计就是 粒子数是否变化
+bool GridSlamProcessor::processScan(const RangeReading & reading, // 输入reading
+                                      int adaptParticles)   // 有 缺省值
+  {
     /**retireve the position from the reading, and compute the odometry*/
-    OrientedPoint relPose=reading.getPose();
-    if (!m_count){
-      m_lastPartPose=m_odoPose=relPose;
+    OrientedPoint relPose=reading.getPose();  // relPose：laser中心 t 时刻的 odom 测量值
+    // reading 中的 pose 就是 odom 测量值
+    if (!m_count)// 如果之前还没度过激光数据
+    {
+      m_lastPartPose=m_odoPose=relPose; // m_odoPose：laser中心 t-1 时刻的 odom 测量值
     }
-    
+
     //write the state of the reading and update all the particles using the motion model
-    for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
+    // 由 odom 信息，计算 每个粒子 的 t 时刻位姿
+    for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+    {
       OrientedPoint& pose(it->pose);
+      // 更新 粒子的位置，依据 odom 测量数据，还有高斯分布的噪声
       pose=m_motionModel.drawFromMotion(it->pose, relPose, m_odoPose);
+      // 返回这个 pose 又什么用？
     }
 
     // update the output file
@@ -336,36 +362,38 @@ void GridSlamProcessor::setMotionModelParameters
       m_outputStream << reading.getTime();
       m_outputStream << endl;
     }
-    if (m_outputStream.is_open()){
+    if (m_outputStream.is_open())
+    {
       m_outputStream << setiosflags(ios::fixed) << setprecision(6);
       m_outputStream << "ODO_UPDATE "<< m_particles.size() << " ";
-      for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-	OrientedPoint& pose(it->pose);
-	m_outputStream << setiosflags(ios::fixed) << setprecision(3) << pose.x << " " << pose.y << " ";
-	m_outputStream << setiosflags(ios::fixed) << setprecision(6) << pose.theta << " " << it-> weight << " ";
+      for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+      {
+      	OrientedPoint& pose(it->pose);
+      	m_outputStream << setiosflags(ios::fixed) << setprecision(3) << pose.x << " " << pose.y << " ";
+      	m_outputStream << setiosflags(ios::fixed) << setprecision(6) << pose.theta << " " << it-> weight << " ";
       }
       m_outputStream << reading.getTime();
       m_outputStream << endl;
     }
-    
+
     //invoke the callback
     onOdometryUpdate();
-    
+
 
     // accumulate the robot translation and rotation
     OrientedPoint move=relPose-m_odoPose;
     move.theta=atan2(sin(move.theta), cos(move.theta));
-    m_linearDistance+=sqrt(move*move);
-    m_angularDistance+=fabs(move.theta);
-    
+    m_linearDistance+=sqrt(move*move);      // 直线运动距离 又 增加一点点
+    m_angularDistance+=fabs(move.theta);    // 角度运动也增加了一点点
+
     // if the robot jumps throw a warning
     if (m_linearDistance>m_distanceThresholdCheck){
       cerr << "***********************************************************************" << endl;
       cerr << "********** Error: m_distanceThresholdCheck overridden!!!! *************" << endl;
       cerr << "m_distanceThresholdCheck=" << m_distanceThresholdCheck << endl;
-      cerr << "Old Odometry Pose= " << m_odoPose.x << " " << m_odoPose.y 
+      cerr << "Old Odometry Pose= " << m_odoPose.x << " " << m_odoPose.y
 	   << " " <<m_odoPose.theta << endl;
-      cerr << "New Odometry Pose (reported from observation)= " << relPose.x << " " << relPose.y 
+      cerr << "New Odometry Pose (reported from observation)= " << relPose.x << " " << relPose.y
 	   << " " <<relPose.theta << endl;
       cerr << "***********************************************************************" << endl;
       cerr << "** The Odometry has a big jump here. This is probably a bug in the   **" << endl;
@@ -373,128 +401,147 @@ void GridSlamProcessor::setMotionModelParameters
       cerr << "** crap or can lead to a core dump since the map doesn't fit.... C&G **" << endl;
       cerr << "***********************************************************************" << endl;
     }
-    
-    m_odoPose=relPose;
-    
+
+    m_odoPose=relPose;  // 把 t 时刻的 odom 测量存起来，
+
     bool processed=false;
 
     // process a scan only if the robot has traveled a given distance or a certain amount of time has elapsed
-    if (! m_count 
-	|| m_linearDistance>=m_linearThresholdDistance 
-	|| m_angularDistance>=m_angularThresholdDistance
-    || (period_ >= 0.0 && (reading.getTime() - last_update_time_) > period_)){
-      last_update_time_ = reading.getTime();      
+    //  process a scan 只当：机器人运动一定距离，或者，经过一定时间
+    // processscan 正式登场
+    // 前面做的铺垫：drawFromMotion -> 更新粒子位置
+    if (! m_count  // 没读过激光束据
+    || m_linearDistance>=m_linearThresholdDistance  // 达到运动距离
+    || m_angularDistance>=m_angularThresholdDistance  // 达到运动角度
+    || (period_ >= 0.0 && (reading.getTime() - last_update_time_) > period_)) // 经历一定时间
+    //period_在哪里设定的？在这个文件的一开始设定为 5.0，
+    {
+      last_update_time_ = reading.getTime();  // 转存 本次的 数据产生时间
 
-      if (m_outputStream.is_open()){
-	m_outputStream << setiosflags(ios::fixed) << setprecision(6);
-	m_outputStream << "FRAME " <<  m_readingCount;
-	m_outputStream << " " << m_linearDistance;
-	m_outputStream << " " << m_angularDistance << endl;
+      if (m_outputStream.is_open())
+      {
+        m_outputStream << setiosflags(ios::fixed) << setprecision(6);
+        m_outputStream << "FRAME " <<  m_readingCount;
+        m_outputStream << " " << m_linearDistance;
+        m_outputStream << " " << m_angularDistance << endl;
       }
-      
       if (m_infoStream)
-	m_infoStream << "update frame " <<  m_readingCount << endl
-		     << "update ld=" << m_linearDistance << " ad=" << m_angularDistance << endl;
-      
-      
-      cerr << "Laser Pose= " << reading.getPose().x << " " << reading.getPose().y 
-	   << " " << reading.getPose().theta << endl;
-      
-      
+      	m_infoStream << "update frame " <<  m_readingCount << endl<< "update ld=" << m_linearDistance << " ad=" << m_angularDistance << endl;
+      cerr << "Laser Pose= " << reading.getPose().x << " " << reading.getPose().y<< " " << reading.getPose().theta << endl; // reading 中的 pose 就是 odom 测量值
+
       //this is for converting the reading in a scan-matcher feedable form
       assert(reading.size()==m_beams);
+
+      // 又把 reading 转换为 简单格式。一开始就是从简单格式转成reading的
       double * plainReading = new double[m_beams];
-      for(unsigned int i=0; i<m_beams; i++){
-	plainReading[i]=reading[i];
+      // 从 RangeReading 类型 转化为简单 plainReading 类型
+      for(unsigned int i=0; i<m_beams; i++)
+      {
+      	plainReading[i]=reading[i];
       }
+
       m_infoStream << "m_count " << m_count << endl;
 
-      RangeReading* reading_copy = 
-              new RangeReading(reading.size(),
-                               &(reading[0]),
-                               static_cast<const RangeSensor*>(reading.getSensor()),
-                               reading.getTime());
+      // 又 复制了一次 RangeReading，可能用于以后折腾用
+      RangeReading* reading_copy = new RangeReading(reading.size(),
+                                     &(reading[0]),
+                                     static_cast<const RangeSensor*>(reading.getSensor()),
+                                     reading.getTime());
 
-      if (m_count>0){
-	scanMatch(plainReading);
-	if (m_outputStream.is_open()){
-	  m_outputStream << "LASER_READING "<< reading.size() << " ";
-	  m_outputStream << setiosflags(ios::fixed) << setprecision(2);
-	  for (RangeReading::const_iterator b=reading.begin(); b!=reading.end(); b++){
-	    m_outputStream << *b << " ";
-	  }
-	  OrientedPoint p=reading.getPose();
-	  m_outputStream << setiosflags(ios::fixed) << setprecision(6);
-	  m_outputStream << p.x << " " << p.y << " " << p.theta << " " << reading.getTime()<< endl;
-	  m_outputStream << "SM_UPDATE "<< m_particles.size() << " ";
-	  for (ParticleVector::const_iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-	    const OrientedPoint& pose=it->pose;
-	    m_outputStream << setiosflags(ios::fixed) << setprecision(3) <<  pose.x << " " << pose.y << " ";
-	    m_outputStream << setiosflags(ios::fixed) << setprecision(6) <<  pose.theta << " " << it-> weight << " ";
-	  }
-	  m_outputStream << endl;
-	}
-	onScanmatchUpdate();
-	
-	updateTreeWeights(false);
-				
-	if (m_infoStream){
-	  m_infoStream << "neff= " << m_neff  << endl;
-	}
-	if (m_outputStream.is_open()){
-	  m_outputStream << setiosflags(ios::fixed) << setprecision(6);
-	  m_outputStream << "NEFF " << m_neff << endl;
-	}
- 	resample(plainReading, adaptParticles, reading_copy);
-	
-      } else {
-	m_infoStream << "Registering First Scan"<< endl;
-	for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){	
-	  m_matcher.invalidateActiveArea();
-	  m_matcher.computeActiveArea(it->map, it->pose, plainReading);
-	  m_matcher.registerScan(it->map, it->pose, plainReading);
-	  
-	  // cyr: not needed anymore, particles refer to the root in the beginning!
-	  TNode* node=new	TNode(it->pose, 0., it->node,  0);
-	  //node->reading=0;
-      node->reading = reading_copy;
-	  it->node=node;
-	  
-	}
+      if (m_count>0) // 如果不是第一次采集数据
+      {
+        // 主要就是这一句
+        scanMatch(plainReading);    // 又是一个重要函数
+
+        // 下面都没用
+        if (m_outputStream.is_open())
+        {
+          m_outputStream << "LASER_READING "<< reading.size() << " ";
+          m_outputStream << setiosflags(ios::fixed) << setprecision(2);
+          for (RangeReading::const_iterator b=reading.begin(); b!=reading.end(); b++)
+          {
+            m_outputStream << *b << " ";
+          }
+          OrientedPoint p=reading.getPose();
+
+          m_outputStream << setiosflags(ios::fixed) << setprecision(6);
+          m_outputStream << p.x << " " << p.y << " " << p.theta << " " << reading.getTime()<< endl;
+          m_outputStream << "SM_UPDATE "<< m_particles.size() << " ";
+          for (ParticleVector::const_iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+          {
+            const OrientedPoint& pose=it->pose;
+            m_outputStream << setiosflags(ios::fixed) << setprecision(3) <<  pose.x << " " << pose.y << " ";
+            m_outputStream << setiosflags(ios::fixed) << setprecision(6) <<  pose.theta << " " << it-> weight << " ";
+          }
+          m_outputStream << endl;
+        }
+        onScanmatchUpdate();
+
+        updateTreeWeights(false);   // false 表示还没有归一化
+
+        if (m_infoStream)
+        {
+          m_infoStream << "neff= " << m_neff  << endl;
+        }
+        if (m_outputStream.is_open())
+        {
+          m_outputStream << setiosflags(ios::fixed) << setprecision(6);
+          m_outputStream << "NEFF " << m_neff << endl;
+        }
+        // 这句有用，在 hxx 头文件中定义的
+        // adaptParticles 在函数头文件定义中 默认值 = 0
+        resample(plainReading, adaptParticles, reading_copy);
+      }
+      else  // 如果是第一次采集数据
+      {
+      	m_infoStream << "Registering First Scan"<< endl;
+
+      	for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+        {
+      	  m_matcher.invalidateActiveArea();
+      	  m_matcher.computeActiveArea(it->map, it->pose, plainReading);
+      	  m_matcher.registerScan(it->map, it->pose, plainReading);
+
+      	  // cyr: not needed anymore, particles refer to the root in the beginning!
+      	  TNode* node=new	TNode(it->pose, 0., it->node,  0);
+      	  //node->reading=0;
+            node->reading = reading_copy;
+      	  it->node=node;
+      	}
       }
       //		cerr  << "Tree: normalizing, resetting and propagating weights at the end..." ;
       updateTreeWeights(false);
       //		cerr  << ".done!" <<endl;
-      
+
       delete [] plainReading;
       m_lastPartPose=m_odoPose; //update the past pose for the next iteration
       m_linearDistance=0;
       m_angularDistance=0;
       m_count++;
       processed=true;
-      
+
       //keep ready for the next step
-      for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-	it->previousPose=it->pose;
+      for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+      {
+        it->previousPose=it->pose;
       }
-      
     }
     if (m_outputStream.is_open())
       m_outputStream << flush;
     m_readingCount++;
     return processed;
   }
-  
-  
+
+
   std::ofstream& GridSlamProcessor::outputStream(){
     return m_outputStream;
   }
-  
+
   std::ostream& GridSlamProcessor::infoStream(){
     return m_infoStream;
   }
-  
-  
+
+// 返回 weighSum 最高的那个粒子的 id
   int GridSlamProcessor::getBestParticleIndex() const{
     unsigned int bi=0;
     double bw=-std::numeric_limits<double>::max();
@@ -510,9 +557,5 @@ void GridSlamProcessor::setMotionModelParameters
   void GridSlamProcessor::onResampleUpdate(){}
   void GridSlamProcessor::onOdometryUpdate(){}
 
-  
+
 };// end namespace
-
-
-
-

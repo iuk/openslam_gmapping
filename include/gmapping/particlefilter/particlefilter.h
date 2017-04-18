@@ -144,46 +144,76 @@ void rle(OutputIterator& out, const Iterator & begin, const Iterator & end){
 
 //BEGIN legacy
 template <class Particle, class Numeric>
-struct uniform_resampler{
-	std::vector<unsigned int> resampleIndexes(const std::vector<Particle> & particles, int nparticles=0) const;
-	std::vector<Particle> resample(const std::vector<Particle> & particles, int nparticles=0) const;
-	Numeric neff(const std::vector<Particle> & particles) const;
+struct uniform_resampler
+{
+        // 函数 获得 重采样 index
+        std::vector<unsigned int> resampleIndexes(const std::vector<Particle> & particles,
+                                                  int nparticles=0) const;
+        // 函数 重采样
+        std::vector<Particle> resample(const std::vector<Particle> & particles,
+                                       int nparticles=0) const;
+
+        Numeric neff(const std::vector<Particle> & particles) const;
 };
 
 /*Implementation of the above stuff*/
+// 在调用时，Particle Numeric 都是 double
+// std::vector<Particle>& particles 是权重 vector
+// nparticles 是？ 一开始 = 0
 template <class Particle, class Numeric>
-std::vector<unsigned int> uniform_resampler<Particle, Numeric>:: resampleIndexes(const std::vector<Particle>& particles, int nparticles) const{
-	Numeric cweight=0;
+std::vector<unsigned int> uniform_resampler<Particle, Numeric>::
+    resampleIndexes(const std::vector<Particle>& particles, int nparticles) const
+{
+    Numeric cweight=0;
 
-	//compute the cumulative weights
-	unsigned int n=0;
-	for (typename std::vector<Particle>::const_iterator it=particles.begin(); it!=particles.end(); ++it){
-		cweight+=(Numeric)*it;
-		n++;
-	}
+    //compute the cumulative weights
+    unsigned int n=0;
 
-	if (nparticles>0)
-		n=nparticles;
-	
-	//compute the interval
-	Numeric interval=cweight/n;
+    // 遍历所有权重
+    for (typename std::vector<Particle>::const_iterator it=particles.begin(); it!=particles.end(); ++it)
+    {
+        cweight+=(Numeric)*it;  //权重累加
+        n++;    // 粒子个数
+    }
 
-	//compute the initial target weight
-	Numeric target=interval*::drand48();
-	//compute the resampled indexes
+    if (nparticles>0)   // 在 processScan 头文件定义中，这个变量默认值 = 0
+        n=nparticles;
 
-	cweight=0;
-	std::vector<unsigned int> indexes(n);
-	n=0;
-	unsigned int i=0;
-	for (typename std::vector<Particle>::const_iterator it=particles.begin(); it!=particles.end(); ++it, ++i){
-		cweight+=(Numeric)* it;
-		while(cweight>target){
-			indexes[n++]=i;
-			target+=interval;
-		}
-	}
-	return indexes;
+    // 如果 n = 0：则返回 indexes 的个数
+
+    //compute the interval，间隔？
+    Numeric interval=cweight/n;
+
+    //compute the initial target weight
+    // ::drand48() 返回 0.0 ～ 1.0 之间的一个随机数
+    Numeric target = interval * ::drand48();    // 给 target 一个小于 interval 的随机数作为初始值
+    //compute the resampled indexes
+
+    cweight=0;
+    std::vector<unsigned int> indexes(n);   // 粒子个数个 int vector 向量
+    n=0;
+    unsigned int i=0;
+
+    // 遍历所有权重
+    for (typename std::vector<Particle>::const_iterator it=particles.begin();
+         it!=particles.end();
+         ++it, ++i)
+    {
+        cweight+=(Numeric)* it; // 又是权重累加 ？？
+
+        while(cweight>target)   // ？？
+        {
+            indexes[n++]=i;     // 一旦累加到超过 target，就记录此时的 id
+            target+=interval;   // 同时 target 再自增一个间隔 interval
+        }
+    }
+
+/*
+ * 原来 |-----|--|----|-------|--|
+ * 间隔 |----|----|----|----|----|
+ * 输出id：1 2 4 5
+*/
+    return indexes;
 }
 
 template <class Particle, class Numeric>

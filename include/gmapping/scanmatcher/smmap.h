@@ -7,31 +7,52 @@
 
 namespace GMapping {
 
-struct PointAccumulator{
-	typedef point<float> FloatPoint;
-	/* before 
+struct PointAccumulator
+{
+        typedef point<float> FloatPoint;    // 定义一个 Float Point
+	/* before
 	PointAccumulator(int i=-1): acc(0,0), n(0), visits(0){assert(i==-1);}
 	*/
 	/*after begin*/
 	PointAccumulator(): acc(0,0), n(0), visits(0){}
 	PointAccumulator(int i): acc(0,0), n(0), visits(0){assert(i==-1);}
 	/*after end*/
-        inline void update(bool value, const Point& p=Point(0,0));
-	inline Point mean() const {return 1./n*Point(acc.x, acc.y);}
-	inline operator double() const { return visits?(double)n*SIGHT_INC/(double)visits:-1; }
-	inline void add(const PointAccumulator& p) {acc=acc+p.acc; n+=p.n; visits+=p.visits; }
+	inline void update(bool value, const Point& p=Point(0,0));
+
+	inline Point mean() const
+	{
+		return 1./n*Point(acc.x, acc.y);
+	}
+
+	inline operator double() const
+	{
+		return visits?(double)n*SIGHT_INC/(double)visits:-1;
+	}
+
+	inline void add(const PointAccumulator& p)
+	{
+		acc=acc+p.acc;
+		n+=p.n;
+		visits+=p.visits;
+	}
+
 	static const PointAccumulator& Unknown();
 	static PointAccumulator* unknown_ptr;
-	FloatPoint acc;
-	int n, visits;
+
+        FloatPoint acc; // 可存一个 float 点，用来存放 点的坐标 累加结果的
+
+        int n, visits;  // n 表示一累加了多少个点
+
 	inline double entropy() const;
 };
 
-void PointAccumulator::update(bool value, const Point& p){
-	if (value) {
+void PointAccumulator::update(bool value, const Point& p)
+{
+	if (value)
+	{
 		acc.x+= static_cast<float>(p.x);
-		acc.y+= static_cast<float>(p.y); 
-		n++; 
+		acc.y+= static_cast<float>(p.y);
+		n++;
 		visits+=SIGHT_INC;
 	} else
 		visits++;
@@ -46,9 +67,10 @@ double PointAccumulator::entropy() const{
 	return -( x*log(x)+ (1-x)*log(1-x) );
 }
 
-
+// 这里不是 std map
+// Map(const Point& center, double worldSizeX, double worldSizeY, double delta);
 typedef Map<PointAccumulator,HierarchicalArray2D<PointAccumulator> > ScanMatcherMap;
 
 };
 
-#endif 
+#endif

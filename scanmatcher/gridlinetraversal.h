@@ -107,15 +107,23 @@ void GridLineTraversal::gridLineCore( IntPoint start, IntPoint end, GridLineTrav
   line->num_points = cnt;
 }
 
-void GridLineTraversal::gridLine( IntPoint start, IntPoint end, GridLineTraversalLine *line ) {
+void GridLineTraversal::gridLine( IntPoint start,
+                                  IntPoint end,
+                                  GridLineTraversalLine *line )
+{
   int i,j;
   int half;
   IntPoint v;
   gridLineCore( start, end, line );
-  if ( start.x!=line->points[0].x ||
-       start.y!=line->points[0].y ) {
+
+  if ( start.x!=line->points[0].x ||start.y!=line->points[0].y )
+  {
     half = line->num_points/2;
-    for (i=0,j=line->num_points - 1;i<half; i++,j--) {
+
+    for (i=0, j=line->num_points - 1;
+         i<half;
+         i++,j--)
+    {
       v = line->points[i];
       line->points[i] = line->points[j];
       line->points[j] = v;

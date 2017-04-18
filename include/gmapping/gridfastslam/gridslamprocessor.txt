@@ -6,37 +6,50 @@
 
 /**Just scan match every single particle.
 If the scan matching fails, the particle gets a default likelihood.*/
-inline void GridSlamProcessor::scanMatch(const double* plainReading){
+// 输入：简单 plainreading
+inline void GridSlamProcessor::scanMatch(const double* plainReading)
+{
   // sample a new pose from each scan in the reference
-  
   double sumScore=0;
-  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
-    OrientedPoint corrected;
+
+// 循环每个粒子
+  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+  {
+    OrientedPoint corrected;  // 储存 scanmatch 优化后的 t 时刻粒子位置
     double score, l, s;
+    //optimize：
+    //输入：map 粒子携带地图，init t 时刻粒子位置（初始值），t 时刻 雷达数据
+    //输出：pnew 优化后的 t 时刻粒子位置，粒子得分 score
+    // it->pose 由 motionmodel 计算的 t 时刻初始值
     score=m_matcher.optimize(corrected, it->map, it->pose, plainReading);
     //    it->pose=corrected;
-    if (score>m_minimumScore){
-      it->pose=corrected;
-    } else {
-	if (m_infoStream){
-	  m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
-	  m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
-	  m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
-	}
+    if (score>m_minimumScore) // 如果 得分大于阈值
+    {
+      it->pose=corrected; // 则更新 粒子的 位置
+    }
+    else  // 否则啥也不干，只输出一些信息，不更新粒子的位置，还是使用原来的  odom 估算出来的位置
+    {
+    	if (m_infoStream){
+    	  m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
+    	  m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
+    	  m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
+    	}
     }
 
     m_matcher.likelihoodAndScore(s, l, it->map, it->pose, plainReading);
-    sumScore+=score;
-    it->weight+=l;
-    it->weightSum+=l;
+    sumScore+=score;  // 将每个粒子的 score 相加
+    it->weight+=l;    // 更新当前粒子的权重
+    it->weightSum+=l; // 更新当前粒子的权重和
 
     //set up the selective copy of the active area
     //by detaching the areas that will be updated
     m_matcher.invalidateActiveArea();
+
+    // 跟新当前粒子的地图？
     m_matcher.computeActiveArea(it->map, it->pose, plainReading);
   }
   if (m_infoStream)
-    m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;	
+    m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;
 }
 
 inline void GridSlamProcessor::normalize(){
@@ -47,7 +60,7 @@ inline void GridSlamProcessor::normalize(){
     lmax=it->weight>lmax?it->weight:lmax;
   }
   //cout << "!!!!!!!!!!! maxwaight= "<< lmax << endl;
-  
+
   m_weights.clear();
   double wcum=0;
   m_neff=0;
@@ -56,7 +69,7 @@ inline void GridSlamProcessor::normalize(){
     wcum+=m_weights.back();
     //cout << "l=" << it->weight<< endl;
   }
-  
+
   m_neff=0;
   for (std::vector<double>::iterator it=m_weights.begin(); it!=m_weights.end(); it++){
     *it=*it/wcum;
@@ -64,49 +77,64 @@ inline void GridSlamProcessor::normalize(){
     m_neff+=w*w;
   }
   m_neff=1./m_neff;
-  
+
 }
 
-inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSize, const RangeReading* reading){
-  
+// 重采样
+inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSize, const RangeReading* reading)
+{
+
   bool hasResampled = false;
-  
+
   TNodeVector oldGeneration;
-  for (unsigned int i=0; i<m_particles.size(); i++){
+  for (unsigned int i=0; i<m_particles.size(); i++) // 把当前粒子存入 oldGeneration 向量中
+  {
     oldGeneration.push_back(m_particles[i].node);
   }
-  
-  if (m_neff<m_resampleThreshold*m_particles.size()){		
-    
+
+  if (m_neff<m_resampleThreshold*m_particles.size())  // 如果 neff 过小，则 重采样
+  {
+
     if (m_infoStream)
       m_infoStream  << "*************RESAMPLE***************" << std::endl;
-    
+
+///**the particle weights (internally used)*/
+//在头文件中定义的粒子权重向量 std::vector<double> m_weights;
     uniform_resampler<double, double> resampler;
+
+///**the particle indexes after resampling (internally used)*/
+//头文件中：std::vector<unsigned int> m_indexes;
     m_indexes=resampler.resampleIndexes(m_weights, adaptSize);
-    
-    if (m_outputStream.is_open()){
+
+//没有用
+    if (m_outputStream.is_open())
+    {
       m_outputStream << "RESAMPLE "<< m_indexes.size() << " ";
-      for (std::vector<unsigned int>::const_iterator it=m_indexes.begin(); it!=m_indexes.end(); it++){
-	m_outputStream << *it <<  " ";
+      for (std::vector<unsigned int>::const_iterator it=m_indexes.begin(); it!=m_indexes.end(); it++)
+      {
+        m_outputStream << *it <<  " ";
       }
       m_outputStream << std::endl;
     }
-    
+
     onResampleUpdate();
     //BEGIN: BUILDING TREE
     ParticleVector temp;
     unsigned int j=0;
     std::vector<unsigned int> deletedParticles;  		//this is for deleteing the particles which have been resampled away.
-    
+
     //		cerr << "Existing Nodes:" ;
-    for (unsigned int i=0; i<m_indexes.size(); i++){
+    for (unsigned int i=0; i<m_indexes.size(); i++)
+    {
       //			cerr << " " << m_indexes[i];
-      while(j<m_indexes[i]){
-	deletedParticles.push_back(j);
-	j++;
+      while(j<m_indexes[i])
+      {
+      	deletedParticles.push_back(j);
+      	j++;
 			}
       if (j==m_indexes[i])
-	j++;
+        j++;
+
       Particle & p=m_particles[m_indexes[i]];
       TNode* node=0;
       TNode* oldNode=oldGeneration[m_indexes[i]];
@@ -115,7 +143,7 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
       //node->reading=0;
       node->reading=reading;
       //			cerr << "A("<<node->parent->childs <<") " <<endl;
-      
+
       temp.push_back(p);
       temp.back().node=node;
       temp.back().previousIndex=m_indexes[i];
@@ -132,7 +160,7 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
       m_particles[deletedParticles[i]].node=0;
     }
     std::cerr  << " Done" <<std::endl;
-    
+
     //END: BUILDING TREE
     std::cerr << "Deleting old particles..." ;
     m_particles.clear();
@@ -146,16 +174,19 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
     }
     std::cerr  << " Done" <<std::endl;
     hasResampled = true;
-  } else {
+  }
+  else
+  {
     int index=0;
     std::cerr << "Registering Scans:";
     TNodeVector::iterator node_it=oldGeneration.begin();
-    for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
+    for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+    {
       //create a new node in the particle tree and add it to the old tree
-      //BEGIN: BUILDING TREE  
+      //BEGIN: BUILDING TREE
       TNode* node=0;
       node=new TNode(it->pose, 0.0, *node_it, 0);
-      
+
       //node->reading=0;
       node->reading=reading;
       it->node=node;
@@ -166,12 +197,11 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
       it->previousIndex=index;
       index++;
       node_it++;
-      
+
     }
     std::cerr  << "Done" <<std::endl;
-    
   }
   //END: BUILDING TREE
-  
+
   return hasResampled;
 }

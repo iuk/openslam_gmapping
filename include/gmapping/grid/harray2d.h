@@ -7,7 +7,7 @@
 
 namespace GMapping {
 
-template <class Cell>
+template <class Cell>  // 分级2D阵列？
 class HierarchicalArray2D: public Array2D<autoptr< Array2D<Cell> > >{
 	public:
 		typedef std::set< point<int>, pointcomparator<int> > PointSet;
@@ -18,19 +18,19 @@ class HierarchicalArray2D: public Array2D<autoptr< Array2D<Cell> > >{
 		void resize(int ixmin, int iymin, int ixmax, int iymax);
 		inline int getPatchSize() const {return m_patchMagnitude;}
 		inline int getPatchMagnitude() const {return m_patchMagnitude;}
-		
+
 		inline const Cell& cell(int x, int y) const;
 		inline Cell& cell(int x, int y);
 		inline bool isAllocated(int x, int y) const;
 		inline AccessibilityState cellState(int x, int y) const ;
 		inline IntPoint patchIndexes(int x, int y) const;
-		
+
 		inline const Cell& cell(const IntPoint& p) const { return cell(p.x,p.y); }
 		inline Cell& cell(const IntPoint& p) { return cell(p.x,p.y); }
 		inline bool isAllocated(const IntPoint& p) const { return isAllocated(p.x,p.y);}
 		inline AccessibilityState cellState(const IntPoint& p) const { return cellState(p.x,p.y); }
 		inline IntPoint patchIndexes(const IntPoint& p) const { return patchIndexes(p.x,p.y);}
-		
+
 		inline void setActiveArea(const PointSet&, bool patchCoords=false);
 		const PointSet& getActiveArea() const {return m_activeArea; }
 		inline void allocActiveArea();
@@ -42,7 +42,7 @@ class HierarchicalArray2D: public Array2D<autoptr< Array2D<Cell> > >{
 };
 
 template <class Cell>
-HierarchicalArray2D<Cell>::HierarchicalArray2D(int xsize, int ysize, int patchMagnitude) 
+HierarchicalArray2D<Cell>::HierarchicalArray2D(int xsize, int ysize, int patchMagnitude)
   :Array2D<autoptr< Array2D<Cell> > >::Array2D((xsize>>patchMagnitude), (ysize>>patchMagnitude)){
 	m_patchMagnitude=patchMagnitude;
 	m_patchSize=1<<m_patchMagnitude;
@@ -88,7 +88,7 @@ void HierarchicalArray2D<Cell>::resize(int xmin, int ymin, int xmax, int ymax){
 	delete [] this->m_cells;
 	this->m_cells=newcells;
 	this->m_xsize=xsize;
-	this->m_ysize=ysize; 
+	this->m_ysize=ysize;
 }
 
 template <class Cell>
@@ -107,7 +107,7 @@ HierarchicalArray2D<Cell>& HierarchicalArray2D<Cell>::operator=(const Hierarchic
 	for (int x=0; x<this->m_xsize; x++)
 		for (int y=0; y<this->m_ysize; y++)
 			this->m_cells[x][y]=hg.m_cells[x][y];
-	
+
 	m_activeArea.clear();
 	m_patchMagnitude=hg.m_patchMagnitude;
 	m_patchSize=hg.m_patchSize;
@@ -116,9 +116,11 @@ HierarchicalArray2D<Cell>& HierarchicalArray2D<Cell>::operator=(const Hierarchic
 
 
 template <class Cell>
-void HierarchicalArray2D<Cell>::setActiveArea(const typename HierarchicalArray2D<Cell>::PointSet& aa, bool patchCoords){
+void HierarchicalArray2D<Cell>::setActiveArea(const typename HierarchicalArray2D<Cell>::PointSet& aa, bool patchCoords)
+{
 	m_activeArea.clear();
-	for (PointSet::const_iterator it= aa.begin(); it!=aa.end(); ++it) {
+	for (PointSet::const_iterator it= aa.begin(); it!=aa.end(); ++it)
+	{
 		IntPoint p;
 		if (patchCoords)
 			p=*it;
@@ -152,7 +154,7 @@ void HierarchicalArray2D<Cell>::allocActiveArea(){
 		Array2D<Cell>* patch=0;
 		if (!ptr){
 			patch=createPatch(*it);
-		} else{	
+		} else{
 			patch=new Array2D<Cell>(*ptr);
 		}
 		this->m_cells[it->x][it->y]=autoptr< Array2D<Cell> >(patch);
@@ -197,4 +199,3 @@ const Cell& HierarchicalArray2D<Cell>::cell(int x, int y) const{
 };
 
 #endif
-

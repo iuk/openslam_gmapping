@@ -28,13 +28,13 @@ namespace GMapping {
      optimization for each particle.  It is initialized with the
      pose drawn from the motion model, and the pose is corrected
      according to the each particle map.<br>
-     In order to avoid unnecessary computation the filter state is updated 
+     In order to avoid unnecessary computation the filter state is updated
      only when the robot moves more than a given threshold.
   */
   class GridSlamProcessor{
   public:
 
-    
+
     /**This class defines the the node of reversed tree in which the trajectories are stored.
        Each node of a tree has a pointer to its parent and a counter indicating the number of childs of a node.
        The tree is updated in a way consistent with the operation performed on the particles.
@@ -54,8 +54,8 @@ namespace GMapping {
       ~TNode();
 
       /**The pose of the robot*/
-      OrientedPoint pose; 
-      
+      OrientedPoint pose;
+
       /**The weight of the particle*/
       double weight;
 
@@ -80,12 +80,12 @@ namespace GMapping {
       /**visit flag (internally used)*/
       mutable bool flag;
     };
-    
+
     typedef std::vector<GridSlamProcessor::TNode*> TNodeVector;
     typedef std::deque<GridSlamProcessor::TNode*> TNodeDeque;
-    
+
     /**This class defines a particle of the filter. Each particle has a map, a pose, a weight and retains the current node in the trajectory tree*/
-    struct Particle{
+    struct Particle{  // 粒子结构体
       /**constructs a particle, given a map
 	 @param map: the particle map
       */
@@ -119,12 +119,14 @@ namespace GMapping {
       int previousIndex;
 
       /** Entry to the trajectory tree */
-      TNode* node; 
+      TNode* node;
+      // 粒子不是树形结构，通过其内置的 TNode 树型结构的结构体，可以追溯粒子的所有父级粒子的信息
+      // 应该是这样吧。。
     };
-	
-    
+
+
     typedef std::vector<Particle> ParticleVector;
-    
+
     /** Constructs a GridSlamProcessor, initialized with the default parameters */
     GridSlamProcessor();
 
@@ -132,36 +134,36 @@ namespace GMapping {
      @param infoStr: the output stream
     */
     GridSlamProcessor(std::ostream& infoStr);
-    
+
     /** @returns  a deep copy of the grid slam processor with all the internal structures.
     */
     GridSlamProcessor* clone() const;
-    
+
     /**Deleted the gridslamprocessor*/
     virtual ~GridSlamProcessor();
-    
+
     //methods for accessing the parameters
     void setSensorMap(const SensorMap& smap);
-    void init(unsigned int size, double xmin, double ymin, double xmax, double ymax, double delta, 
+    void init(unsigned int size, double xmin, double ymin, double xmax, double ymax, double delta,
 	      OrientedPoint initialPose=OrientedPoint(0,0,0));
-    void setMatchingParameters(double urange, double range, double sigma, int kernsize, double lopt, double aopt, 
+    void setMatchingParameters(double urange, double range, double sigma, int kernsize, double lopt, double aopt,
 			       int iterations, double likelihoodSigma=1, double likelihoodGain=1, unsigned int likelihoodSkip=0);
     void setMotionModelParameters(double srr, double srt, double str, double stt);
     void setUpdateDistances(double linear, double angular, double resampleThreshold);
     void setUpdatePeriod(double p) {period_=p;}
-    
+
     //the "core" algorithm
     void processTruePos(const OdometryReading& odometry);
     bool processScan(const RangeReading & reading, int adaptParticles=0);
-    
+
     /**This method copies the state of the filter in a tree.
      The tree is represented through reversed pointers (each node has a pointer to its parent).
      The leafs are stored in a vector, whose size is the same as the number of particles.
      @returns the leafs of the tree
     */
-    TNodeVector getTrajectories() const;
+    TNodeVector getTrajectories() const;  // 获取 轨迹
     void integrateScanSequence(TNode* node);
-    
+
     /**the scanmatcher algorithm*/
     ScanMatcher m_matcher;
     /**the stream used for writing the output of the algorithm*/
@@ -170,14 +172,14 @@ namespace GMapping {
     std::ostream& infoStream();
     /**@returns the particles*/
     inline const ParticleVector& getParticles() const {return m_particles; }
-    
+
     inline const std::vector<unsigned int>& getIndexes() const{return m_indexes; }
     int getBestParticleIndex() const;
     //callbacks
     virtual void onOdometryUpdate();
     virtual void onResampleUpdate();
     virtual void onScanmatchUpdate();
-	
+
     //accessor methods
     /**the maxrange of the laser to consider */
     MEMBER_PARAM_SET_GET(m_matcher, double, laserMaxRange, protected, public, public);
@@ -239,42 +241,43 @@ namespace GMapping {
 
     /**odometry error in  rotation as a function of rotation (theta/theta) [motionmodel]*/
     STRUCT_PARAM_SET_GET(m_motionModel, double, stt, protected, public, public);
-		
+
     /**minimum score for considering the outcome of the scanmatching good*/
     PARAM_SET_GET(double, minimumScore, protected, public, public);
 
   protected:
     /**Copy constructor*/
     GridSlamProcessor(const GridSlamProcessor& gsp);
- 
+
     /**the laser beams*/
     unsigned int m_beams;
-    double last_update_time_;
-    double period_;
-    
+    double last_update_time_;   // 上一次 reading 数据中的时间
+    double period_; // 在机器人 静止时，经过多久时间来一次 slam，好几个地方都初始化为 5.0
+
     /**the particles*/
-    ParticleVector m_particles;
+    ParticleVector m_particles;   // gsp 的粒子
 
     /**the particle indexes after resampling (internally used)*/
     std::vector<unsigned int> m_indexes;
 
     /**the particle weights (internally used)*/
     std::vector<double> m_weights;
-    
+
     /**the motion model*/
     MotionModel m_motionModel;
 
     /**this sets the neff based resampling threshold*/
     PARAM_SET_GET(double, resampleThreshold, protected, public, public);
-      
+    // launch 文件中定义的是 0.5
+
     //state
     int  m_count, m_readingCount;
     OrientedPoint m_lastPartPose;
-    OrientedPoint m_odoPose;
+    OrientedPoint m_odoPose;    // laser 中心 t-1 时刻的位置 old pose ？
     OrientedPoint m_pose;
     double m_linearDistance, m_angularDistance;
     PARAM_GET(double, neff, protected, public);
-      
+
     //processing parameters (size of the map)
     PARAM_GET(double, xmin, protected, public);
     PARAM_GET(double, ymin, protected, public);
@@ -282,55 +285,283 @@ namespace GMapping {
     PARAM_GET(double, ymax, protected, public);
     //processing parameters (resolution of the map)
     PARAM_GET(double, delta, protected, public);
-	
+
     //registration score (if a scan score is above this threshold it is registered in the map)
     PARAM_SET_GET(double, regScore, protected, public, public);
     //registration score (if a scan score is below this threshold a scan matching failure is reported)
     PARAM_SET_GET(double, critScore, protected, public, public);
     //registration score maximum move allowed between consecutive scans
     PARAM_SET_GET(double, maxMove, protected, public, public);
-	
+
     //process a scan each time the robot translates of linearThresholdDistance
     PARAM_SET_GET(double, linearThresholdDistance, protected, public, public);
 
     //process a scan each time the robot rotates more than angularThresholdDistance
     PARAM_SET_GET(double, angularThresholdDistance, protected, public, public);
-    
+
     //smoothing factor for the likelihood
     PARAM_SET_GET(double, obsSigmaGain, protected, public, public);
-	
+
     //stream in which to write the gfs file
     std::ofstream m_outputStream;
 
     // stream in which to write the messages
     std::ostream& m_infoStream;
-    
-    
+
+
     // the functions below performs side effect on the internal structure,
     //should be called only inside the processScan method
   private:
-    
+
     /**scanmatches all the particles*/
     inline void scanMatch(const double *plainReading);
     /**normalizes the particle weights*/
     inline void normalize();
-    
+
     // return if a resampling occured or not
-    inline bool resample(const double* plainReading, int adaptParticles, 
+    inline bool resample(const double* plainReading, int adaptParticles,
 			 const RangeReading* rr=0);
-    
+
     //tree utilities
-    
+
     void updateTreeWeights(bool weightsAlreadyNormalized = false);
     void resetTree();
     double propagateWeights();
-    
+
   };
 
 typedef std::multimap<const GridSlamProcessor::TNode*, GridSlamProcessor::TNode*> TNodeMultimap;
 
 
-#include "gridslamprocessor.hxx"
+
+#ifdef MACOSX
+// This is to overcome a possible bug in Apple's GCC.
+#define isnan(x) (x==FP_NAN)
+#endif
+
+/**Just scan match every single particle.
+If the scan matching fails, the particle gets a default likelihood.*/
+// 输入：简单 plainreading
+inline void GridSlamProcessor::scanMatch(const double* plainReading)
+{
+  // sample a new pose from each scan in the reference
+  double sumScore=0;
+
+// 循环每个粒子
+  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+  {
+    OrientedPoint corrected;  // 储存 scanmatch 优化后的 t 时刻粒子位置
+    double score, l, s;
+    //optimize：
+    //输入：map 粒子携带地图，init t 时刻粒子位置（初始值），t 时刻 雷达数据
+    //输出：pnew 优化后的 t 时刻粒子位置，粒子得分 score
+    // it->pose 由 motionmodel 计算的 t 时刻初始值
+
+    //*************************************************************************//
+
+    score=m_matcher.optimize(corrected, it->map, it->pose, plainReading);   // 重要函数
+    //    it->pose=corrected;
+    if (score>m_minimumScore) // 如果 得分大于阈值
+    {
+      it->pose=corrected; // 则更新 粒子的 位置
+    }
+    else  // 否则啥也不干，只输出一些信息，不更新粒子的位置，还是使用原来的  odom 估算出来的位置
+    {
+        if (m_infoStream){
+          m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
+          m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
+          m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
+        }
+    }
+
+    m_matcher.likelihoodAndScore(s, l, it->map, it->pose, plainReading);
+    sumScore+=score;  // 将每个粒子的 score 相加
+    it->weight+=l;    // 更新当前粒子的权重  权重 和 score 的计算过程一样，就是取不取 e 的次幂的区别
+                      // weight 一直是 负的吗？
+    it->weightSum+=l; // 更新当前粒子的权重和
+
+    //set up the selective copy of the active area
+    //by detaching the areas that will be updated
+    m_matcher.invalidateActiveArea();
+
+    // 跟新当前粒子的地图？
+    m_matcher.computeActiveArea(it->map, it->pose, plainReading);   // 重要函数
+  }
+  if (m_infoStream)
+    m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;
+}
+
+inline void GridSlamProcessor::normalize(){
+  //normalize the log m_weights
+  double gain=1./(m_obsSigmaGain*m_particles.size());
+  double lmax= -std::numeric_limits<double>::max();
+  for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
+    lmax=it->weight>lmax?it->weight:lmax;
+  }
+  //cout << "!!!!!!!!!!! maxwaight= "<< lmax << endl;
+
+  m_weights.clear();
+  double wcum=0;
+  m_neff=0;
+  for (std::vector<Particle>::iterator it=m_particles.begin(); it!=m_particles.end(); it++){
+    m_weights.push_back(exp(gain*(it->weight-lmax)));
+    wcum+=m_weights.back();
+    //cout << "l=" << it->weight<< endl;
+  }
+
+  m_neff=0;
+  for (std::vector<double>::iterator it=m_weights.begin(); it!=m_weights.end(); it++){
+    *it=*it/wcum;
+    double w=*it;
+    m_neff+=w*w;
+  }
+  m_neff=1./m_neff;
+
+}
+
+// 重采样
+inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSize,
+                                        const RangeReading* reading)
+{
+
+  bool hasResampled = false;
+
+  TNodeVector oldGeneration;
+
+  for (unsigned int i=0; i<m_particles.size(); i++) // 把当前粒子存入 oldGeneration 向量中
+  {
+    oldGeneration.push_back(m_particles[i].node);
+  }
+
+  // neff 似乎是固定的，是初始化时候的粒子个数
+  // m_resampleThreshold 在 launch 中定为 0.5
+  // 所以如下判断就变成了：当粒子总数 > 初始总数的 2 倍时，进行 resample ？
+  if (m_neff<m_resampleThreshold*m_particles.size())  // 如果 neff 过小，则 重采样
+  {
+
+    if (m_infoStream)
+      m_infoStream  << "*************RESAMPLE***************" << std::endl;
+
+///**the particle weights (internally used)*/
+//在头文件中定义的粒子权重向量 std::vector<double> m_weights;
+    uniform_resampler<double, double> resampler;
+
+///**the particle indexes after resampling (internally used)*/
+//头文件中：std::vector<unsigned int> m_indexes;
+    m_indexes=resampler.resampleIndexes(m_weights, adaptSize);  // 根据权重获得一组粒子 id
+
+//没有用
+    if (m_outputStream.is_open())
+    {
+      m_outputStream << "RESAMPLE "<< m_indexes.size() << " ";
+      for (std::vector<unsigned int>::const_iterator it=m_indexes.begin(); it!=m_indexes.end(); it++)
+      {
+        m_outputStream << *it <<  " ";
+      }
+      m_outputStream << std::endl;
+    }
+
+    onResampleUpdate();
+    //BEGIN: BUILDING TREE
+
+    ParticleVector temp;
+    unsigned int j=0;
+    std::vector<unsigned int> deletedParticles;
+    //this is for deleteing the particles which have been resampled away.
+
+    //		cerr << "Existing Nodes:" ;
+
+    // 对上面获得的 粒子 id 循环
+    for (unsigned int i=0; i<m_indexes.size(); i++)
+    {
+      //			cerr << " " << m_indexes[i];
+      while(j<m_indexes[i])
+      {
+        deletedParticles.push_back(j);  // 将没有出现的 id 存入到这里
+        j++;
+      }
+
+      if (j==m_indexes[i])
+        j++;
+
+      Particle & p=m_particles[m_indexes[i]];   // 读出 被 选中 的粒子
+      TNode* node=0;
+      TNode* oldNode=oldGeneration[m_indexes[i]];
+      //			cerr << i << "->" << m_indexes[i] << "B("<<oldNode->childs <<") ";
+      node=new	TNode(p.pose, 0, oldNode, 0);   // oldNode 作为 父级 去构造 一个新Node
+      //node->reading=0;
+      node->reading=reading;
+      //			cerr << "A("<<node->parent->childs <<") " <<endl;
+
+      temp.push_back(p);    // 储存被选中的粒子
+      temp.back().node=node;    // 为粒子更新新的 node
+      temp.back().previousIndex=m_indexes[i];   // 给粒子记录着先前的 id
+    }
+
+    while(j<m_indexes.size())
+    {
+      deletedParticles.push_back(j);
+      j++;
+    }
+    //		cerr << endl;
+    std::cerr <<  "Deleting Nodes:";
+
+    for (unsigned int i=0; i<deletedParticles.size(); i++)
+    {
+      std::cerr <<" " << deletedParticles[i];
+      delete m_particles[deletedParticles[i]].node;
+      m_particles[deletedParticles[i]].node=0;
+    }
+    std::cerr  << " Done" <<std::endl;
+
+    //END: BUILDING TREE
+    std::cerr << "Deleting old particles..." ;
+    m_particles.clear();
+    std::cerr << "Done" << std::endl;
+    std::cerr << "Copying Particles and  Registering  scans...";
+
+    // 遍历一遍 temp 中构造的粒子
+    for (ParticleVector::iterator it=temp.begin(); it!=temp.end(); it++)
+    {
+      it->setWeight(0); // 粒子的权重 = 0
+      m_matcher.invalidateActiveArea(); // 就是执行 m_activeAreaComputed=false;
+      m_matcher.registerScan(it->map, it->pose, plainReading);
+      m_particles.push_back(*it);
+    }
+    std::cerr  << " Done" <<std::endl;
+    hasResampled = true;
+  }
+  else
+  {
+    int index=0;
+    std::cerr << "Registering Scans:";
+    TNodeVector::iterator node_it=oldGeneration.begin();
+    for (ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++)
+    {
+      //create a new node in the particle tree and add it to the old tree
+      //BEGIN: BUILDING TREE
+      TNode* node=0;
+      node=new TNode(it->pose, 0.0, *node_it, 0);
+
+      //node->reading=0;
+      node->reading=reading;
+      it->node=node;
+
+      //END: BUILDING TREE
+      m_matcher.invalidateActiveArea();
+      m_matcher.registerScan(it->map, it->pose, plainReading);
+      it->previousIndex=index;
+      index++;
+      node_it++;
+
+    }
+    std::cerr  << "Done" <<std::endl;
+  }
+  //END: BUILDING TREE
+
+  return hasResampled;
+}
+
 
 };
 

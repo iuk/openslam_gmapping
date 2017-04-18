@@ -14,13 +14,13 @@ namespace GMapping {
 class ScanMatcher{
 	public:
 		typedef Covariance3 CovarianceMatrix;
-		
+
 		ScanMatcher();
 		~ScanMatcher();
 		double icpOptimize(OrientedPoint& pnew, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const;
 		double optimize(OrientedPoint& pnew, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const;
 		double optimize(OrientedPoint& mean, CovarianceMatrix& cov, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const;
-		
+
 		double   registerScan(ScanMatcherMap& map, const OrientedPoint& p, const double* readings);
 		void setLaserParameters
 			(unsigned int beams, double* angles, const OrientedPoint& lpose);
@@ -36,17 +36,17 @@ class ScanMatcher{
 		double likelihood(double& _lmax, OrientedPoint& _mean, CovarianceMatrix& _cov, const ScanMatcherMap& map, const OrientedPoint& p, Gaussian3& odometry, const double* readings, double gain=180.);
 		inline const double* laserAngles() const { return m_laserAngles; }
 		inline unsigned int laserBeams() const { return m_laserBeams; }
-		
+
 		static const double nullLikelihood;
 	protected:
 		//state of the matcher
 		bool m_activeAreaComputed;
-		
+
 		/**laser parameters*/
 		unsigned int m_laserBeams;
 		double       m_laserAngles[LASER_MAXBEAMS];
 		//OrientedPoint m_laserPose;
-		PARAM_SET_GET(OrientedPoint, laserPose, protected, public, public)
+                PARAM_SET_GET(OrientedPoint, laserPose, protected, public, public)
 		PARAM_SET_GET(double, laserMaxRange, protected, public, public)
 		/**scan_matcher parameters*/
 		PARAM_SET_GET(double, usableRange, protected, public, public)
@@ -66,60 +66,80 @@ class ScanMatcher{
 		PARAM_SET_GET(double, fullnessThreshold, protected, public, public)
 		PARAM_SET_GET(double, angularOdometryReliability, protected, public, public)
 		PARAM_SET_GET(double, linearOdometryReliability, protected, public, public)
-		PARAM_SET_GET(double, freeCellRatio, protected, public, public)
-		PARAM_SET_GET(unsigned int, initialBeamsSkip, protected, public, public)
+                // 初始化 m_freeCellRatio=sqrt(2.);
+                PARAM_SET_GET(double, freeCellRatio, protected, public, public)
+                // m_initialBeamSkip 初始化 = 0
+                PARAM_SET_GET(unsigned int, initialBeamsSkip, protected, public, public)
 
 		// allocate this large array only once
 		IntPoint* m_linePoints;
 };
 
-inline double ScanMatcher::icpStep(OrientedPoint & pret, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const{
-	const double * angle=m_laserAngles+m_initialBeamsSkip;
+inline double ScanMatcher::icpStep(OrientedPoint & pret, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const
+{
+	const double * angle=m_laserAngles+m_initialBeamsSkip;	// reading 对应的角度信息数组
+
+	// 由粒子位置（机器人位置），解算 laser 雷达位置
 	OrientedPoint lp=p;
 	lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
 	lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
 	lp.theta+=m_laserPose.theta;
+
 	unsigned int skip=0;
-	double freeDelta=map.getDelta()*m_freeCellRatio;
-	std::list<PointPair> pairs;
-	
-	for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++){
+	double freeDelta=map.getDelta()*m_freeCellRatio;	// 不知道呀，这啥呀
+	std::list<PointPair> pairs;	// 点对？啥
+
+	// 从雷达数据中，一个点一个点的读
+	// r 是每个点的数据（range）
+	for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++)
+	{
 		skip++;
 		skip=skip>m_likelihoodSkip?0:skip;
+
 		if (*r>m_usableRange||*r==0.0) continue;
 		if (skip) continue;
-		Point phit=lp;
+
+		Point phit=lp;	// 从激光点的距离和角度信息，解算出激光点的 位置坐标
 		phit.x+=*r*cos(lp.theta+*angle);
 		phit.y+=*r*sin(lp.theta+*angle);
+
+		// 将激光点坐标 从 world - map，这么说，粒子中存的点是  world 点。
 		IntPoint iphit=map.world2map(phit);
-		Point pfree=lp;
-		pfree.x+=(*r-map.getDelta()*freeDelta)*cos(lp.theta+*angle);
-		pfree.y+=(*r-map.getDelta()*freeDelta)*sin(lp.theta+*angle);
+
+		Point pfree=lp;	// 这又是什么点
+		pfree.x+= (*r - map.getDelta()*freeDelta) * cos(lp.theta+*angle);
+		pfree.y+= (*r - map.getDelta()*freeDelta) * sin(lp.theta+*angle);
  		pfree=pfree-phit;
 		IntPoint ipfree=map.world2map(pfree);
+
 		bool found=false;
 		Point bestMu(0.,0.);
 		Point bestCell(0.,0.);
+
 		for (int xx=-m_kernelSize; xx<=m_kernelSize; xx++)
-		for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++){
+		for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++)
+		{
 			IntPoint pr=iphit+IntPoint(xx,yy);
 			IntPoint pf=pr+ipfree;
 			//AccessibilityState s=map.storage().cellState(pr);
 			//if (s&Inside && s&Allocated){
 				const PointAccumulator& cell=map.cell(pr);
 				const PointAccumulator& fcell=map.cell(pf);
-				if (((double)cell )> m_fullnessThreshold && ((double)fcell )<m_fullnessThreshold){
+
+				if (((double)cell )> m_fullnessThreshold && ((double)fcell )<m_fullnessThreshold)
+				{
 					Point mu=phit-cell.mean();
-					if (!found){
+					if (!found)
+					{
 						bestMu=mu;
 						bestCell=cell.mean();
 						found=true;
-					}else
-						if((mu*mu)<(bestMu*bestMu)){
-							bestMu=mu;
-							bestCell=cell.mean();
-						} 
-						
+					}
+					else if((mu*mu)<(bestMu*bestMu))
+					{
+						bestMu=mu;
+						bestCell=cell.mean();
+					}
 				}
 			//}
 		}
@@ -129,7 +149,7 @@ inline double ScanMatcher::icpStep(OrientedPoint & pret, const ScanMatcherMap& m
 		}
 		//std::cerr << std::endl;
 	}
-	
+
 	OrientedPoint result(0,0,0);
 	//double icpError=icpNonlinearStep(result,pairs);
 	std::cerr << "result(" << pairs.size() << ")=" << result.x << " " << result.y << " " << result.theta << std::endl;
@@ -140,111 +160,169 @@ inline double ScanMatcher::icpStep(OrientedPoint & pret, const ScanMatcherMap& m
 	return score(map, p, readings);
 }
 
-inline double ScanMatcher::score(const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const{
-	double s=0;
-	const double * angle=m_laserAngles+m_initialBeamsSkip;
-	OrientedPoint lp=p;
-	lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
-	lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
-	lp.theta+=m_laserPose.theta;
-	unsigned int skip=0;
-	double freeDelta=map.getDelta()*m_freeCellRatio;
-	for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++){
-		skip++;
-		skip=skip>m_likelihoodSkip?0:skip;
-		if (skip||*r>m_usableRange||*r==0.0) continue;
-		Point phit=lp;
-		phit.x+=*r*cos(lp.theta+*angle);
-		phit.y+=*r*sin(lp.theta+*angle);
-		IntPoint iphit=map.world2map(phit);
-		Point pfree=lp;
-		pfree.x+=(*r-map.getDelta()*freeDelta)*cos(lp.theta+*angle);
-		pfree.y+=(*r-map.getDelta()*freeDelta)*sin(lp.theta+*angle);
- 		pfree=pfree-phit;
-		IntPoint ipfree=map.world2map(pfree);
-		bool found=false;
-		Point bestMu(0.,0.);
-		for (int xx=-m_kernelSize; xx<=m_kernelSize; xx++)
-		for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++){
-			IntPoint pr=iphit+IntPoint(xx,yy);
-			IntPoint pf=pr+ipfree;
-			//AccessibilityState s=map.storage().cellState(pr);
-			//if (s&Inside && s&Allocated){
-				const PointAccumulator& cell=map.cell(pr);
-				const PointAccumulator& fcell=map.cell(pf);
-				if (((double)cell )> m_fullnessThreshold && ((double)fcell )<m_fullnessThreshold){
-					Point mu=phit-cell.mean();
-					if (!found){
-						bestMu=mu;
-						found=true;
-					}else
-						bestMu=(mu*mu)<(bestMu*bestMu)?mu:bestMu;
-				}
-			//}
-		}
-		if (found)
-			s+=exp(-1./m_gaussianSigma*bestMu*bestMu);
-	}
-	return s;
+// 计算粒子 score ？
+// 输入：t 时刻粒子 携带的地图， t 时刻粒子的位置（odom 获得的，未优化的）， 雷达数据 reading
+inline double ScanMatcher::score(const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const
+{
+    double s=0;
+    const double * angle=m_laserAngles+m_initialBeamsSkip;
+
+    OrientedPoint lp=p;	// 从粒子的位置 （机体位置） 解算 laser 的位置
+    lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
+    lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
+    lp.theta+=m_laserPose.theta;
+
+    unsigned int skip=0;
+ //！！！！！！！！！！   freeDelta 怎么乘了两次 map.getDelta() ？
+    double freeDelta=map.getDelta()*m_freeCellRatio;// 初始化中 m_freeCellRatio=sqrt(2.);
+
+    // 循环每个 reading 中的数据点
+    for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++)
+    {
+        skip++;
+        skip=skip>m_likelihoodSkip?0:skip;  // 做相似度计算时，值可以设定，多少个点计算一次得分
+
+        if (skip||*r>m_usableRange||*r==0.0) continue;  // 只有当 skip 变为 0 时，才继续计算得分
+
+        // 计算激光点的 坐标
+        Point phit=lp;
+        phit.x+=*r*cos(lp.theta+*angle);
+        phit.y+=*r*sin(lp.theta+*angle);
+        // 激光点坐标  world 转 map
+        IntPoint iphit=map.world2map(phit); // 激光点 世界坐标 -> 地图上的像素坐标
+
+    // map.getDelta() 返回的似乎是分辨率，就是最小一个点的变长是多长
+        Point pfree=lp;
+        pfree.x+=(*r - map.getDelta()*freeDelta) * cos(lp.theta+*angle);
+        pfree.y+=(*r - map.getDelta()*freeDelta) * sin(lp.theta+*angle);
+        pfree=pfree-phit;
+        IntPoint ipfree=map.world2map(pfree);	// 似乎就是计算的 没有被射到激光的像素点坐标差
+
+        bool found=false;
+        Point bestMu(0.,0.);
+
+        // 对于每个激光数据点，遍历一遍小窗口，m_kernelSize = 1 或 3
+        for (int xx=-m_kernelSize; xx<=m_kernelSize; xx++)
+        for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++)
+        {
+            IntPoint pr=iphit+IntPoint(xx,yy);  // 地图上的哪个像素点
+            IntPoint pf=pr+ipfree;  // 加上这个像素差，应该就是一个没有被射到的像素点
+            //AccessibilityState s=map.storage().cellState(pr);
+            //if (s&Inside && s&Allocated){
+
+            // map.cell（） 返回粒子内带地图中对应的值
+            // 0～1 占据概率
+/* 明白这个地图是怎么回事了：
+ * ScanMatcherMap 类型的定义：是储存在  HierarchicalArray2D 结构中的 PointAccumulator 类型
+ * HierarchicalArray2D 是一个类似二维数组：map.cell(pr);这句使用的就是二维数组的方法来取 PointAccumulator
+ * PointAccumulator 是一个点累加器，通过 mean() 方法可以获得累加的平均值
+ * 而通过 (double) 前缀，可以获得一个成员变量值，这里是地图像素点占据概率
+ * 在这里 PointAccumulator 累加的是真实世界world 中的float坐标值，储存的是地图占据概率
+ * HierarchicalArray2D 是地图结构，它的坐标是 int 型的
+*/
+            const PointAccumulator& cell=map.cell(pr);	// 从地图中读取相应点
+            const PointAccumulator& fcell=map.cell(pf);
+            // 构造函数中 	m_fullnessThreshold=0.1;
+            if (((double)cell ) > m_fullnessThreshold 	//如果 该激光点被占据
+            && ((double)fcell ) < m_fullnessThreshold)	// 且其相邻点（传感器方向）没有被占据
+            {
+                Point mu=phit-cell.mean();  // cell.mean() 是：这个像素点对应真实世界坐标
+                // 则 mu 就是 激光点 与 像素点 真实世界坐标的差
+                if (!found)
+                {
+                    bestMu=mu;
+                    found=true;
+                }else
+                    bestMu=(mu*mu)<(bestMu*bestMu)?mu:bestMu;   // 把差距小的值作为 best
+            }
+            //}  // 也就是在窗口中得到一个最小的距离
+        }
+
+
+        if (found)
+                s+=exp(-1./m_gaussianSigma*bestMu*bestMu);  // 距离越小 s 越小
+    }
+    return s;   // s 越小 说明 scan 与 地图 最贴近
 }
 
-inline unsigned int ScanMatcher::likelihoodAndScore(double& s, double& l, const ScanMatcherMap& map, const OrientedPoint& p, const double* readings) const{
-	using namespace std;
-	l=0;
-	s=0;
-	const double * angle=m_laserAngles+m_initialBeamsSkip;
-	OrientedPoint lp=p;
-	lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
-	lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
-	lp.theta+=m_laserPose.theta;
-	double noHit=nullLikelihood/(m_likelihoodSigma);
-	unsigned int skip=0;
-	unsigned int c=0;
-	double freeDelta=map.getDelta()*m_freeCellRatio;
-	for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++){
-		skip++;
-		skip=skip>m_likelihoodSkip?0:skip;
-		if (*r>m_usableRange) continue;
-		if (skip) continue;
-		Point phit=lp;
-		phit.x+=*r*cos(lp.theta+*angle);
-		phit.y+=*r*sin(lp.theta+*angle);
-		IntPoint iphit=map.world2map(phit);
-		Point pfree=lp;
-		pfree.x+=(*r-freeDelta)*cos(lp.theta+*angle);
-		pfree.y+=(*r-freeDelta)*sin(lp.theta+*angle);
-		pfree=pfree-phit;
-		IntPoint ipfree=map.world2map(pfree);
-		bool found=false;
-		Point bestMu(0.,0.);
-		for (int xx=-m_kernelSize; xx<=m_kernelSize; xx++)
-		for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++){
-			IntPoint pr=iphit+IntPoint(xx,yy);
-			IntPoint pf=pr+ipfree;
-			//AccessibilityState s=map.storage().cellState(pr);
-			//if (s&Inside && s&Allocated){
-				const PointAccumulator& cell=map.cell(pr);
-				const PointAccumulator& fcell=map.cell(pf);
-				if (((double)cell )>m_fullnessThreshold && ((double)fcell )<m_fullnessThreshold){
-					Point mu=phit-cell.mean();
-					if (!found){
-						bestMu=mu;
-						found=true;
-					}else
-						bestMu=(mu*mu)<(bestMu*bestMu)?mu:bestMu;
-				}
-			//}	
-		}
-		if (found){
-			s+=exp(-1./m_gaussianSigma*bestMu*bestMu);
-			c++;
-		}
-		if (!skip){
-			double f=(-1./m_likelihoodSigma)*(bestMu*bestMu);
-			l+=(found)?f:noHit;
-		}
-	}
-	return c;
+inline unsigned int ScanMatcher::likelihoodAndScore(double& s, double& l,
+                                                    const ScanMatcherMap& map,
+                                                    const OrientedPoint& p,
+                                                    const double* readings) const
+{
+    using namespace std;
+    l=0;
+    s=0;
+    const double * angle=m_laserAngles+m_initialBeamsSkip;
+
+    // 激光雷达坐标
+    OrientedPoint lp=p;
+    lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
+    lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
+    lp.theta+=m_laserPose.theta;
+
+    double noHit=nullLikelihood/(m_likelihoodSigma);
+    unsigned int skip=0;
+    unsigned int c=0;
+    double freeDelta=map.getDelta()*m_freeCellRatio;
+
+    // 遍历 reading 数据的每个点
+    for (const double* r=readings+m_initialBeamsSkip; r<readings+m_laserBeams; r++, angle++)
+    {
+        skip++;
+        skip=skip>m_likelihoodSkip?0:skip;
+        if (*r>m_usableRange) continue;
+        if (skip) continue;
+
+        // 激光点坐标
+        Point phit=lp;
+        phit.x+=*r*cos(lp.theta+*angle);
+        phit.y+=*r*sin(lp.theta+*angle);
+        IntPoint iphit=map.world2map(phit);
+
+        Point pfree=lp;
+        pfree.x+=(*r-freeDelta)*cos(lp.theta+*angle);
+        pfree.y+=(*r-freeDelta)*sin(lp.theta+*angle);
+        pfree=pfree-phit;
+        IntPoint ipfree=map.world2map(pfree);
+
+        bool found=false;
+        Point bestMu(0.,0.);
+
+        // 对每个激光点 取一个小窗口
+        for (int xx=-m_kernelSize; xx<=m_kernelSize; xx++)
+        for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++)
+        {
+            IntPoint pr=iphit+IntPoint(xx,yy);
+            IntPoint pf=pr+ipfree;
+            //AccessibilityState s=map.storage().cellState(pr);
+            //if (s&Inside && s&Allocated){
+            const PointAccumulator& cell=map.cell(pr);
+            const PointAccumulator& fcell=map.cell(pf);
+            if (((double)cell )>m_fullnessThreshold && ((double)fcell )<m_fullnessThreshold)
+            {
+                Point mu=phit-cell.mean();
+                if (!found){
+                    bestMu=mu;
+                    found=true;
+                }else
+                    bestMu=(mu*mu)<(bestMu*bestMu)?mu:bestMu;
+            }
+            //}
+        }
+        if (found){
+            s+=exp(-1./m_gaussianSigma*bestMu*bestMu);  // 这里跟score 计算一样的
+            c++;    // c 好像没啥用
+        }
+        if (!skip)
+        {
+            // 距离越小，f 越小，且 f 总是 <0
+            double f=(-1./m_likelihoodSigma)*(bestMu*bestMu);
+
+            l+=(found)?f:noHit;
+        }
+    }
+    return c;
 }
 
 };

@@ -13,6 +13,7 @@ The cells have to define (int) constructor;
 typedef Array2D<double> DoubleArray2D;
 
 template <class Cell, class Storage, const bool isClass=true> 
+
 class Map{
 	public:
 		Map(int mapSizeX, int mapSizeY, double delta);
@@ -25,9 +26,11 @@ class Map{
 		void grow(double xmin, double ymin, double xmax, double ymax);
 		inline IntPoint world2map(const Point& p) const;
 		inline Point map2world(const IntPoint& p) const;
+
 		inline IntPoint world2map(double x, double y) const 
 		  { return world2map(Point(x,y)); }
-		inline Point map2world(int x, int y) const 
+
+                inline Point map2world(int x, int y) const
 		  { return map2world(IntPoint(x,y)); }
 
 		inline Point getCenter() const {return m_center;}	
@@ -175,13 +178,21 @@ void Map<Cell,Storage,isClass>::grow(double xmin, double ymin, double xmax, doub
 }
 
 
+// 猜测：
+// m_center 地图中心像素对应 世界的坐标点，由于地图的扩张，后期很可能不是世界的 0 0 点
+// m_sizeX2 m_sizeY2 地图 x y 方向像素的 1/2
+// m_delta 一个像素 对应的 世界上 多少米m
+
 template <class Cell, class Storage, const bool isClass>
-IntPoint Map<Cell,Storage,isClass>::world2map(const Point& p) const{
-	return IntPoint( (int)round((p.x-m_center.x)/m_delta)+m_sizeX2, (int)round((p.y-m_center.y)/m_delta)+m_sizeY2);
+IntPoint Map<Cell,Storage,isClass>::world2map(const Point& p) const
+{
+        return IntPoint( (int)round((p.x-m_center.x)/m_delta)+m_sizeX2,
+                         (int)round((p.y-m_center.y)/m_delta)+m_sizeY2);
 }
 
 template <class Cell, class Storage, const bool isClass>
-Point Map<Cell,Storage,isClass>::map2world(const IntPoint& p) const{
+Point Map<Cell,Storage,isClass>::map2world(const IntPoint& p) const
+{
 	return Point( (p.x-m_sizeX2)*m_delta,
 		      (p.y-m_sizeY2)*m_delta)+m_center;
 }
